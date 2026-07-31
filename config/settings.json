@@ -1,0 +1,17 @@
+{
+  "discord": {
+    "channels": ["general"]
+  },
+  "openai": {
+    "model": "gemini-2.5-flash",
+    "retry_count": 3,
+    "transcript_chunk_size_tokens": 12000
+  },
+  "trello": {
+    "board_id": "",
+    "list_id": ""
+  },
+  "transcript_retention_days": 30,
+  "transcript_poll_interval_minutes": 3,
+  "summary_style": "concise"
+}

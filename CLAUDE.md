@@ -1,4 +1,4 @@
-# Claude Code Rules
+﻿# Claude Code Rules
 
 This file is generated during init for the selected agent.
 
@@ -208,3 +208,37 @@ Wait for consent; never auto-create ADRs. Group related decisions (stacks, authe
 
 ## Code Standards
 See `.specify/memory/constitution.md` for code quality, testing, performance, security, and architecture principles.
+
+## Active Technologies
+- Python 3.14+ + OpenClaw, OpenAI Agents SDK (OpenAI Responses API), MCP Python client SDK (Otter MCP Server), OAuth client (Otter auth), discord.py, Trello REST API, APScheduler, python-dotenv (001-meeting-workflow-automation)
+- SQLite — embedded, file-based; also stores Otter OAuth token state (research.md R12) (001-meeting-workflow-automation)
+
+## Project Structure
+
+```text
+agents/
+mcp/
+tools/
+workflows/
+models/
+prompts/
+config/
+tests/
+logs/
+main.py
+```
+
+## Commands
+
+pytest; ruff check .
+
+## Code Style
+
+Python 3.14+: Follow standard conventions (PEP 8, type hints — see constitution Engineering Standards)
+
+## Recent Changes
+- 001-meeting-workflow-automation: Revised Otter AI integration from direct REST (`tools/otter_tool.py`) to MCP-based (`mcp_clients/otter_client.py`) with OAuth (research.md R11/R12) — implementation not yet migrated, see plan.md note
+- 001-meeting-workflow-automation: Added Python 3.14+ + OpenClaw, OpenAI Agents SDK, discord.py, Trello REST API, APScheduler, SQLite
+
+<!-- MANUAL ADDITIONS START -->
+<!-- MANUAL ADDITIONS END -->

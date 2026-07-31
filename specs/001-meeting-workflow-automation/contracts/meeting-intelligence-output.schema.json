@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MeetingIntelligenceOutput",
+  "description": "Contract for the Meeting Intelligence Agent's structured output, enforced via the OpenAI Responses API's JSON-schema mode (research.md R8). Implements constitution Principle IV (Structured AI Outputs, NON-NEGOTIABLE) and spec FR-007/FR-008/FR-009/FR-024.",
+  "type": "object",
+  "required": ["summary", "decisions", "discussion_points", "risks", "follow_ups", "action_items"],
+  "additionalProperties": false,
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "Overview of the meeting. If the transcript (or a chunk, per FR-024) lacked enough information for a confident overview, this MUST say so explicitly rather than inventing content (FR-009)."
+    },
+    "decisions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/statement" }
+    },
+    "discussion_points": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "risks": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/statement" }
+    },
+    "open_questions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "follow_ups": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/statement" }
+    },
+    "action_items": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/actionItem" }
+    }
+  },
+  "$defs": {
+    "statement": {
+      "type": "object",
+      "required": ["text", "confident"],
+      "additionalProperties": false,
+      "properties": {
+        "text": { "type": "string" },
+        "confident": {
+          "type": "boolean",
+          "description": "false means the transcript did not clearly support this statement; it MUST still be surfaced, not omitted, per FR-009."
+        }
+      }
+    },
+    "actionItem": {
+      "type": "object",
+      "required": ["task", "owner", "deadline", "priority", "confidence"],
+      "additionalProperties": false,
+      "properties": {
+        "task": { "type": "string" },
+        "owner": {
+          "type": ["string", "null"],
+          "description": "null when no owner is confidently identifiable — the system renders this as the 'Unassigned' placeholder (FR-011); the AI MUST NOT guess an owner."
+        },
+        "deadline": {
+          "type": ["string", "null"],
+          "format": "date",
+          "description": "null when no deadline is confidently identifiable — rendered as 'No deadline' placeholder (FR-011)."
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["low", "medium", "high"]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    }
+  }
+}

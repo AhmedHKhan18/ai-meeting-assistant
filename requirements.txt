@@ -1,0 +1,28 @@
+# Core
+python-dotenv>=1.0.0
+
+# AI — OpenAI Python SDK (Responses API, JSON-schema structured output)
+openai>=1.50.0
+
+# Communication
+discord.py>=2.4.0
+
+# Task board — thin REST client lives in tools/, so a general-purpose HTTP
+# client is the only dependency needed (research.md R7)
+httpx>=0.27.0
+
+# Meeting platform — Otter AI via its MCP Server, OAuth-authenticated
+# (research.md R11/R12; supersedes the prior direct-REST integration)
+mcp>=1.0.0
+
+# Scheduling
+APScheduler>=3.10.0
+
+# Testing
+pytest>=8.0.0
+pytest-asyncio>=0.24.0
+pytest-mock>=3.14.0
+
+# Lint / type-check
+ruff>=0.6.0
+mypy>=1.11.0

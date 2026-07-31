@@ -1,0 +1,15 @@
+[tool.pytest.ini_options]
+testpaths = ["tests/unit", "tests/integration", "tests/e2e"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+ignore = ["UP047"]  # TypeVar-based generics are still idiomatic pre-3.13 style
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true

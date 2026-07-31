@@ -1,0 +1,8 @@
+{
+  "rules": [
+    { "match": "frontend", "owner": "Sara", "specificity": 2 },
+    { "match": "ui", "owner": "Ali", "specificity": 2 },
+    { "match": "backend", "owner": "Ahmed", "specificity": 2 },
+    { "match": "deployment", "owner": "Ahmed", "specificity": 2 }
+  ]
+}
