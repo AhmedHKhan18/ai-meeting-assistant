@@ -52,7 +52,14 @@ def _stub_result(*, confident: bool, owner: str | None) -> dict:
 
 
 async def _run_scenario(
-    db_conn, mock_discord_tool, *, meeting_id: str, transcript_text: str, settings: dict, ai_result: dict
+    db_conn,
+    mock_discord_tool,
+    user_id,
+    *,
+    meeting_id: str,
+    transcript_text: str,
+    settings: dict,
+    ai_result: dict,
 ) -> bool:
     """Returns True if the meeting reached 'processed' with a tracked task
     created, with no manual steps (no exception, no held-back item)."""
@@ -66,7 +73,7 @@ async def _run_scenario(
         "participants": ["Ahmed"],
         "transcript_text": transcript_text,
     }
-    transcript_agent = TranscriptAgent(otter_client, db_conn)
+    transcript_agent = TranscriptAgent(otter_client, db_conn, user_id)
 
     openai_tool = MagicMock()
     openai_tool.generate_structured.return_value = ai_result
@@ -84,6 +91,7 @@ async def _run_scenario(
         meeting_intelligence_agent=intelligence_agent,
         notification_agent=notification_agent,
         conn=db_conn,
+        user_id=user_id,
         channels=["general"],
         trello_workflow=trello_workflow,
     )
@@ -92,7 +100,7 @@ async def _run_scenario(
     if len(processed) != 1:
         return False
 
-    meeting = get_meeting(db_conn, meeting_id)
+    meeting = get_meeting(db_conn, user_id, meeting_id)
     if meeting.processing_status != "processed":
         return False
 
@@ -102,7 +110,9 @@ async def _run_scenario(
 
 
 @pytest.mark.asyncio
-async def test_sc006_zero_manual_steps_across_representative_scenarios(db_conn, mock_discord_tool):
+async def test_sc006_zero_manual_steps_across_representative_scenarios(
+    db_conn, mock_discord_tool, test_user_id
+):
     confident_ahmed = _stub_result(confident=True, owner="Ahmed")
     unconfident_none = _stub_result(confident=False, owner=None)
     long_text = " ".join(f"word{i}" for i in range(50))
@@ -118,6 +128,7 @@ async def test_sc006_zero_manual_steps_across_representative_scenarios(db_conn, 
         results[name] = await _run_scenario(
             db_conn,
             mock_discord_tool,
+            test_user_id,
             meeting_id=meeting_id,
             transcript_text=transcript,
             settings=settings,
@@ -130,9 +141,9 @@ async def test_sc006_zero_manual_steps_across_representative_scenarios(db_conn, 
     # not that a second run happens.
     rerun_otter = AsyncMock()
     rerun_otter.search_meetings.return_value = [{"id": "dup-1"}]
-    rerun_transcript_agent = TranscriptAgent(rerun_otter, db_conn)
+    rerun_transcript_agent = TranscriptAgent(rerun_otter, db_conn, test_user_id)
     rerun_processed = await rerun_transcript_agent.poll_new_meetings()
-    still_processed = get_meeting(db_conn, "dup-1").processing_status == "processed"
+    still_processed = get_meeting(db_conn, test_user_id, "dup-1").processing_status == "processed"
     results["duplicate-safe-rerun"] = (len(rerun_processed) == 0) and still_processed
 
     pass_rate = sum(results.values()) / len(results)

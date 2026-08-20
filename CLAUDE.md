@@ -210,8 +210,10 @@ Wait for consent; never auto-create ADRs. Group related decisions (stacks, authe
 See `.specify/memory/constitution.md` for code quality, testing, performance, security, and architecture principles.
 
 ## Active Technologies
-- Python 3.14+ + OpenClaw, OpenAI Agents SDK (OpenAI Responses API), MCP Python client SDK (Otter MCP Server), OAuth client (Otter auth), discord.py, Trello REST API, APScheduler, python-dotenv (001-meeting-workflow-automation)
+- Python 3.14+ + MeetMind, OpenAI Agents SDK (OpenAI Responses API), MCP Python client SDK (Otter MCP Server), OAuth client (Otter auth), discord.py, Trello REST API, APScheduler, python-dotenv (001-meeting-workflow-automation)
 - SQLite — embedded, file-based; also stores Otter OAuth token state (research.md R12) (001-meeting-workflow-automation)
+- Python 3.14+ (backend, unchanged from feature 001) · TypeScript / Node 24 (new frontend) (002-web-frontend)
+- SQLite, file-based and embedded (unchanged engine from feature 001). Schema revised: new `users`, `sessions`, `integration_credentials`, `assistant_instances` tables; `user_id` foreign key added to `meetings`, `daily_reports`, and `otter_credentials` (action_items/tracked_tasks inherit scope via their `meeting_id`/`action_item_id` joins, unchanged). (002-web-frontend)
 
 ## Project Structure
 
@@ -237,8 +239,9 @@ pytest; ruff check .
 Python 3.14+: Follow standard conventions (PEP 8, type hints — see constitution Engineering Standards)
 
 ## Recent Changes
+- 002-web-frontend: Added Python 3.14+ (backend, unchanged from feature 001) · TypeScript / Node 24 (new frontend)
 - 001-meeting-workflow-automation: Revised Otter AI integration from direct REST (`tools/otter_tool.py`) to MCP-based (`mcp_clients/otter_client.py`) with OAuth (research.md R11/R12) — implementation not yet migrated, see plan.md note
-- 001-meeting-workflow-automation: Added Python 3.14+ + OpenClaw, OpenAI Agents SDK, discord.py, Trello REST API, APScheduler, SQLite
+- 001-meeting-workflow-automation: Added Python 3.14+ + MeetMind, OpenAI Agents SDK, discord.py, Trello REST API, APScheduler, SQLite
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->

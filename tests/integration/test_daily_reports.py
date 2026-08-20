@@ -18,10 +18,10 @@ TODAY = "2026-07-30"
 
 
 @pytest.mark.asyncio
-async def test_morning_report_delivers_within_budget(db_conn, mock_discord_tool):
-    agent = ExecutiveAssistantAgent(db_conn)
+async def test_morning_report_delivers_within_budget(db_conn, mock_discord_tool, test_user_id):
+    agent = ExecutiveAssistantAgent(db_conn, test_user_id)
     notification_agent = NotificationAgent(mock_discord_tool)
-    workflow = MorningReportWorkflow(agent, notification_agent, db_conn, ["general"])
+    workflow = MorningReportWorkflow(agent, notification_agent, db_conn, test_user_id, ["general"])
 
     start = time.monotonic()
     [report] = await workflow.run(date=TODAY)
@@ -33,11 +33,13 @@ async def test_morning_report_delivers_within_budget(db_conn, mock_discord_tool)
 
 
 @pytest.mark.asyncio
-async def test_evening_report_partial_delivery_when_compilation_fails(db_conn, mock_discord_tool):
+async def test_evening_report_partial_delivery_when_compilation_fails(
+    db_conn, mock_discord_tool, test_user_id
+):
     agent = MagicMock()
     agent.compile_evening_report.side_effect = RuntimeError("Otter AI unavailable")
     notification_agent = NotificationAgent(mock_discord_tool)
-    workflow = EveningReportWorkflow(agent, notification_agent, db_conn, ["general"])
+    workflow = EveningReportWorkflow(agent, notification_agent, db_conn, test_user_id, ["general"])
 
     [report] = await workflow.run(date=TODAY)
 
@@ -48,11 +50,15 @@ async def test_evening_report_partial_delivery_when_compilation_fails(db_conn, m
 
 
 @pytest.mark.asyncio
-async def test_report_marked_failed_if_delivery_itself_fails_but_run_continues(db_conn, mock_discord_tool):
-    agent = ExecutiveAssistantAgent(db_conn)
+async def test_report_marked_failed_if_delivery_itself_fails_but_run_continues(
+    db_conn, mock_discord_tool, test_user_id
+):
+    agent = ExecutiveAssistantAgent(db_conn, test_user_id)
     notification_agent = NotificationAgent(mock_discord_tool)
     mock_discord_tool.send_message.side_effect = RuntimeError("Discord unavailable")
-    workflow = MorningReportWorkflow(agent, notification_agent, db_conn, ["general", "other-channel"])
+    workflow = MorningReportWorkflow(
+        agent, notification_agent, db_conn, test_user_id, ["general", "other-channel"]
+    )
 
     reports = await workflow.run(date=TODAY)
 

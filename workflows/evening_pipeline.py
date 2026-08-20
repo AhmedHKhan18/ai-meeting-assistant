@@ -24,11 +24,13 @@ class EveningReportWorkflow:
         executive_assistant_agent: ExecutiveAssistantAgent,
         notification_agent: NotificationAgent,
         conn: sqlite3.Connection,
+        user_id: str,
         channels: list[str],
     ) -> None:
         self.executive_assistant_agent = executive_assistant_agent
         self.notification_agent = notification_agent
         self.conn = conn
+        self.user_id = user_id
         self.channels = channels
 
     async def run(self, *, date: str | None = None) -> list[DailyReport]:
@@ -37,7 +39,11 @@ class EveningReportWorkflow:
             results: list[DailyReport] = []
             for channel in self.channels:
                 existing = get_daily_report(
-                    self.conn, report_type="evening", report_date=report_date, channel=channel
+                    self.conn,
+                    user_id=self.user_id,
+                    report_type="evening",
+                    report_date=report_date,
+                    channel=channel,
                 )
                 if existing:
                     results.append(existing)
@@ -63,6 +69,7 @@ class EveningReportWorkflow:
 
                 report = create_daily_report(
                     self.conn,
+                    user_id=self.user_id,
                     report_type="evening",
                     report_date=report_date,
                     channel=channel,

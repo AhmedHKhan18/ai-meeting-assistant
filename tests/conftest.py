@@ -8,6 +8,7 @@ from unittest.mock import create_autospec
 import pytest
 
 from models.db import init_db
+from models.user import create_user
 from tools.discord_tool import DiscordTool
 
 
@@ -16,6 +17,15 @@ def db_conn():
     conn = init_db(":memory:")
     yield conn
     conn.close()
+
+
+@pytest.fixture()
+def test_user_id(db_conn) -> str:
+    """A real `users` row (feature 002: every meeting/report/credential row
+    has a `user_id` FK, enforced — `PRAGMA foreign_keys = ON` — so tests
+    need an actual user to attach fixtures to, not just an arbitrary string)."""
+    user = create_user(db_conn, email="test@example.com", password_hash="!test!")
+    return user.id
 
 
 @pytest.fixture()

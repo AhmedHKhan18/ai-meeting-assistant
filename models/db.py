@@ -1,20 +1,64 @@
-"""SQLite database module: schema creation and connection helper.
+"""SQLite database module: schema creation, migration, and connection helper.
 
-Single embedded database file (research.md R2). The five core entities from
-data-model.md live here, including the uniqueness constraints that make the
-spec's duplicate-prevention promises storage-enforced rather than just
-application logic (research.md R3; data-model.md TrackedTask/DailyReport).
-Also holds `otter_credentials` — OAuth token state for the Otter MCP Server
-connection (research.md R11/R12), added in the MCP architecture revision.
+Single embedded database file (research.md R2, feature 001). Feature 002 adds
+multi-tenancy: `users`, `sessions`, `integration_credentials`, and
+`assistant_instances` tables, plus a `user_id` column on `meetings`,
+`daily_reports`, and `otter_credentials` (specs/002-web-frontend/data-model.md).
+
+`init_db()` is additive and idempotent (research.md R7): existing tables are
+never dropped, missing columns are added via `ALTER TABLE ... ADD COLUMN`
+(SQLite can't add a column with a `NOT NULL` constraint to a populated table,
+so new `user_id` columns are added nullable, then backfilled onto a single
+"legacy" user so pre-existing local dev data is never silently lost).
 """
 
 from __future__ import annotations
 
 import os
 import sqlite3
+import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 
 _SCHEMA = """
+CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    token_hash TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS integration_credentials (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    provider TEXT NOT NULL CHECK (provider IN ('discord', 'trello', 'gemini')),
+    status TEXT NOT NULL DEFAULT 'not_connected'
+        CHECK (status IN ('not_connected', 'connected', 'needs_reconnection')),
+    secret_encrypted BLOB,
+    masked_hint TEXT,
+    last_validated_at TEXT,
+    updated_at TEXT NOT NULL,
+    UNIQUE (user_id, provider)
+);
+
+CREATE TABLE IF NOT EXISTS assistant_instances (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL UNIQUE REFERENCES users(id),
+    status TEXT NOT NULL DEFAULT 'not_configured'
+        CHECK (status IN ('not_configured', 'stopped', 'running')),
+    last_activity_at TEXT,
+    last_error TEXT,
+    updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS meetings (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
@@ -73,8 +117,7 @@ CREATE TABLE IF NOT EXISTS daily_reports (
     content TEXT NOT NULL DEFAULT '{}',
     delivery_status TEXT NOT NULL DEFAULT 'delivered'
         CHECK (delivery_status IN ('delivered', 'partial', 'failed')),
-    delivered_at TEXT,
-    UNIQUE (report_type, report_date, channel)
+    delivered_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS otter_credentials (
@@ -88,6 +131,13 @@ CREATE TABLE IF NOT EXISTS otter_credentials (
     updated_at TEXT NOT NULL
 );
 """
+
+_LEGACY_USER_ID = "legacy"
+_LEGACY_USER_EMAIL = "legacy@local"
+# Unusable bcrypt-shaped marker — never matches any real password, and login
+# is blocked for this account (research.md R7): it exists only so pre-existing
+# unscoped rows have somewhere to attach rather than being dropped.
+_LEGACY_USER_PASSWORD_HASH = "!disabled!"
 
 
 def get_db_path() -> Path:
@@ -105,8 +155,63 @@ def get_connection(db_path: Path | str | None = None) -> sqlite3.Connection:
     return conn
 
 
+def _has_column(conn: sqlite3.Connection, table: str, column: str) -> bool:
+    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    return any(row["name"] == column for row in rows)
+
+
+def _ensure_legacy_user(conn: sqlite3.Connection) -> str:
+    row = conn.execute("SELECT id FROM users WHERE id = ?", (_LEGACY_USER_ID,)).fetchone()
+    if row:
+        return _LEGACY_USER_ID
+    conn.execute(
+        "INSERT INTO users (id, email, password_hash, created_at) VALUES (?, ?, ?, ?)",
+        (_LEGACY_USER_ID, _LEGACY_USER_EMAIL, _LEGACY_USER_PASSWORD_HASH, datetime.now(UTC).isoformat()),
+    )
+    return _LEGACY_USER_ID
+
+
+def _migrate_user_scoping(conn: sqlite3.Connection) -> None:
+    """Additive migration (research.md R7): add `user_id` to tables that
+    predate multi-tenancy, backfilling any pre-existing rows onto a single
+    legacy user rather than dropping them."""
+    tables_needing_user_id = ("meetings", "daily_reports", "otter_credentials")
+
+    # Add the column first (nullable — SQLite can't add a NOT NULL column to a
+    # populated table) so every table has it before deciding whether there's
+    # anything to backfill.
+    for table in tables_needing_user_id:
+        if not _has_column(conn, table, "user_id"):
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN user_id TEXT REFERENCES users(id)")
+
+    rows_needing_backfill = any(
+        conn.execute(f"SELECT 1 FROM {table} WHERE user_id IS NULL LIMIT 1").fetchone()
+        for table in tables_needing_user_id
+    )
+    if rows_needing_backfill:
+        legacy_user_id = _ensure_legacy_user(conn)
+        for table in tables_needing_user_id:
+            conn.execute(f"UPDATE {table} SET user_id = ? WHERE user_id IS NULL", (legacy_user_id,))
+
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_meetings_user_id ON meetings(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_daily_reports_user_id ON daily_reports(user_id)")
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_otter_credentials_user_id ON otter_credentials(user_id)"
+    )
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_reports_dedup "
+        "ON daily_reports(user_id, report_type, report_date, channel)"
+    )
+
+
 def init_db(db_path: Path | str | None = None) -> sqlite3.Connection:
     conn = get_connection(db_path)
     conn.executescript(_SCHEMA)
     conn.commit()
+    _migrate_user_scoping(conn)
+    conn.commit()
     return conn
+
+
+def new_id() -> str:
+    return str(uuid.uuid4())

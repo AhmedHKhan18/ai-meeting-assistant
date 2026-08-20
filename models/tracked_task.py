@@ -40,12 +40,8 @@ class TrackedTask:
         )
 
 
-def get_tracked_task_by_action_item(
-    conn: sqlite3.Connection, action_item_id: str
-) -> TrackedTask | None:
-    row = conn.execute(
-        "SELECT * FROM tracked_tasks WHERE action_item_id = ?", (action_item_id,)
-    ).fetchone()
+def get_tracked_task_by_action_item(conn: sqlite3.Connection, action_item_id: str) -> TrackedTask | None:
+    row = conn.execute("SELECT * FROM tracked_tasks WHERE action_item_id = ?", (action_item_id,)).fetchone()
     return TrackedTask.from_row(row) if row else None
 
 
@@ -92,10 +88,23 @@ def create_tracked_task(
 
 
 def get_outstanding_tracked_tasks(
-    conn: sqlite3.Connection, *, completed_card_ids: set[str] | None = None
+    conn: sqlite3.Connection, user_id: str, *, completed_card_ids: set[str] | None = None
 ) -> list[TrackedTask]:
-    """Outstanding = not among the Trello card IDs the caller reports as completed."""
-    rows = conn.execute("SELECT * FROM tracked_tasks ORDER BY created_at").fetchall()
+    """Outstanding = not among the Trello card IDs the caller reports as
+    completed. Scoped to `user_id` via a join through action_items ->
+    meetings (specs/002-web-frontend/data-model.md) — tracked_tasks itself
+    has no user_id column, so this is the storage-enforced isolation point
+    for every report/task-listing feature that reads them."""
+    rows = conn.execute(
+        """
+        SELECT tracked_tasks.* FROM tracked_tasks
+        JOIN action_items ON action_items.id = tracked_tasks.action_item_id
+        JOIN meetings ON meetings.id = action_items.meeting_id
+        WHERE meetings.user_id = ?
+        ORDER BY tracked_tasks.created_at
+        """,
+        (user_id,),
+    ).fetchall()
     tasks = [TrackedTask.from_row(r) for r in rows]
     if completed_card_ids is None:
         return tasks

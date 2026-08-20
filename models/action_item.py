@@ -88,7 +88,22 @@ def get_action_items_for_meeting(conn: sqlite3.Connection, meeting_id: str) -> l
 
 
 def get_action_item(conn: sqlite3.Connection, action_item_id: str) -> ActionItem | None:
-    row = conn.execute(
-        "SELECT * FROM action_items WHERE id = ?", (action_item_id,)
-    ).fetchone()
+    row = conn.execute("SELECT * FROM action_items WHERE id = ?", (action_item_id,)).fetchone()
     return ActionItem.from_row(row) if row else None
+
+
+def get_action_items_for_user(conn: sqlite3.Connection, user_id: str) -> list[ActionItem]:
+    """Every action item across the user's own meetings (dashboard `/tasks`,
+    FR-015), storage-scoped via a join to `meetings.user_id` rather than
+    trusting the caller to have already filtered by meeting ownership
+    (data-model.md — the mechanism behind SC-002/SC-006)."""
+    rows = conn.execute(
+        """
+        SELECT action_items.* FROM action_items
+        JOIN meetings ON meetings.id = action_items.meeting_id
+        WHERE meetings.user_id = ?
+        ORDER BY action_items.created_at DESC
+        """,
+        (user_id,),
+    ).fetchall()
+    return [ActionItem.from_row(r) for r in rows]

@@ -28,6 +28,7 @@ class MeetingWorkflow:
         meeting_intelligence_agent: MeetingIntelligenceAgent,
         notification_agent: NotificationAgent,
         conn: sqlite3.Connection,
+        user_id: str,
         channels: list[str],
         trello_workflow=None,
     ) -> None:
@@ -35,6 +36,7 @@ class MeetingWorkflow:
         self.meeting_intelligence_agent = meeting_intelligence_agent
         self.notification_agent = notification_agent
         self.conn = conn
+        self.user_id = user_id
         self.channels = channels
         # Optional: wired in Phase 5 (User Story 3) so each processed
         # meeting's action items automatically flow to Trello.
@@ -49,7 +51,7 @@ class MeetingWorkflow:
         # every cycle is what actually makes a delivery failure recoverable
         # rather than a permanent loss of that meeting's summary/action items.
         new_ids = {meeting.id for meeting in new_meetings}
-        incomplete = [m for m in get_incomplete_meetings(self.conn) if m.id not in new_ids]
+        incomplete = [m for m in get_incomplete_meetings(self.conn, self.user_id) if m.id not in new_ids]
 
         processed: list[Meeting] = []
         for meeting in new_meetings + incomplete:
@@ -62,13 +64,13 @@ class MeetingWorkflow:
         with timed_event(logger, workflow="meeting_workflow", event="process_meeting", meeting_id=meeting.id):
             existing_summary = get_summary_by_meeting(self.conn, meeting.id)
             if existing_summary is None:
-                set_processing_status(self.conn, meeting.id, "processing")
+                set_processing_status(self.conn, self.user_id, meeting.id, "processing")
                 try:
                     result = self.meeting_intelligence_agent.analyze(
                         meeting.transcript_text or "", meeting_title=meeting.title
                     )
                 except Exception as exc:  # noqa: BLE001 — retries already exhausted inside the agent
-                    set_processing_status(self.conn, meeting.id, "failed")
+                    set_processing_status(self.conn, self.user_id, meeting.id, "failed")
                     logger.error(
                         "meeting_intelligence_failed",
                         extra={"fields": {"meeting_id": meeting.id, "error": str(exc)}},
@@ -155,5 +157,5 @@ class MeetingWorkflow:
                         f"'{meeting.title}' — check Trello configuration/connectivity.",
                     )
 
-            set_processing_status(self.conn, meeting.id, "processed")
+            set_processing_status(self.conn, self.user_id, meeting.id, "processed")
             return meeting

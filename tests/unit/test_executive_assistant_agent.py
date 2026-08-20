@@ -1,4 +1,7 @@
-"""T057: unit tests for morning/evening content compilation (FR-016/FR-017)."""
+"""T057: unit tests for morning/evening content compilation (FR-016/FR-017).
+
+Feature 002: ExecutiveAssistantAgent is now constructed with an explicit
+`user_id` and every underlying query is scoped to it."""
 
 from __future__ import annotations
 
@@ -17,9 +20,10 @@ from models.tracked_task import create_tracked_task
 TODAY = datetime.now(UTC).date().isoformat()
 
 
-def _seed_meeting_with_summary_and_tasks(db_conn):
+def _seed_meeting_with_summary_and_tasks(db_conn, user_id):
     create_meeting(
         db_conn,
+        user_id=user_id,
         meeting_id="m1",
         title="Sprint Planning",
         date=f"{TODAY}T09:00:00",
@@ -27,7 +31,7 @@ def _seed_meeting_with_summary_and_tasks(db_conn):
         participants=["Ahmed"],
         transcript_text="...",
     )
-    set_processing_status(db_conn, "m1", "processed")
+    set_processing_status(db_conn, user_id, "m1", "processed")
     create_summary(
         db_conn,
         meeting_id="m1",
@@ -59,9 +63,9 @@ def _seed_meeting_with_summary_and_tasks(db_conn):
     )
 
 
-def test_morning_briefing_includes_todays_meeting_and_high_priority_work(db_conn):
-    _seed_meeting_with_summary_and_tasks(db_conn)
-    agent = ExecutiveAssistantAgent(db_conn)
+def test_morning_briefing_includes_todays_meeting_and_high_priority_work(db_conn, test_user_id):
+    _seed_meeting_with_summary_and_tasks(db_conn, test_user_id)
+    agent = ExecutiveAssistantAgent(db_conn, test_user_id)
 
     briefing = agent.compile_morning_briefing(date=TODAY)
 
@@ -71,9 +75,9 @@ def test_morning_briefing_includes_todays_meeting_and_high_priority_work(db_conn
     assert briefing["unread_notifications"] == []  # honestly empty, not fabricated
 
 
-def test_evening_report_includes_meeting_summary_and_new_cards(db_conn):
-    _seed_meeting_with_summary_and_tasks(db_conn)
-    agent = ExecutiveAssistantAgent(db_conn)
+def test_evening_report_includes_meeting_summary_and_new_cards(db_conn, test_user_id):
+    _seed_meeting_with_summary_and_tasks(db_conn, test_user_id)
+    agent = ExecutiveAssistantAgent(db_conn, test_user_id)
 
     report = agent.compile_evening_report(date=TODAY)
 
@@ -82,8 +86,8 @@ def test_evening_report_includes_meeting_summary_and_new_cards(db_conn):
     assert report["completed_tasks"] == []  # not tracked in v1 — never guessed
 
 
-def test_empty_database_produces_empty_sections_not_errors(db_conn):
-    agent = ExecutiveAssistantAgent(db_conn)
+def test_empty_database_produces_empty_sections_not_errors(db_conn, test_user_id):
+    agent = ExecutiveAssistantAgent(db_conn, test_user_id)
 
     briefing = agent.compile_morning_briefing(date=TODAY)
     report = agent.compile_evening_report(date=TODAY)

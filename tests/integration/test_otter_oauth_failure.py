@@ -30,7 +30,7 @@ async def test_revoked_refresh_token_is_non_recoverable_not_retried(db_conn):
         raise RuntimeError("invalid_grant: refresh token has been revoked")
         yield  # pragma: no cover - unreachable, satisfies generator shape
 
-    client = OtterMCPClient(server_url="https://example.com/mcp", conn=db_conn)
+    client = OtterMCPClient(server_url="https://example.com/mcp", conn=db_conn, user_id="test-user")
     client._session = session_that_fails_oauth
 
     with pytest.raises(NonRecoverableError, match="re-run the authorization flow"):
@@ -55,7 +55,7 @@ async def test_oauth_failure_message_does_not_leak_token_values(db_conn):
         raise RuntimeError(f"invalid_grant: refresh token {leaked_secret} has been revoked")
         yield  # pragma: no cover
 
-    client = OtterMCPClient(server_url="https://example.com/mcp", conn=db_conn)
+    client = OtterMCPClient(server_url="https://example.com/mcp", conn=db_conn, user_id="test-user")
     client._session = session_that_fails_oauth
 
     with pytest.raises(NonRecoverableError) as exc_info:

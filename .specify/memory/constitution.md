@@ -1,10 +1,20 @@
 <!--
-Sync Impact Report
+Sync Impact Report (1.0.1)
+===========================
+Version change: 1.0.0 → 1.0.1
+Rationale: PATCH — project renamed from "OpenClaw" to "MeetMind" throughout
+(product name only; no principle, governance, or standard changed). Updated
+every "OpenClaw" reference in this file's title, preamble, and Principles
+II/III/Governance. No dependent template required structural changes.
+
+---
+
+Sync Impact Report (1.0.0, superseded above)
 ==================
 Version change: [TEMPLATE, unratified] → 1.0.0
 Rationale: Initial ratification. All placeholder tokens replaced with concrete,
 project-specific content derived from user-supplied constitution text for the
-OpenClaw AI Meeting Assistant. No prior version existed, so this is a MAJOR
+MeetMind AI Meeting Assistant. No prior version existed, so this is a MAJOR
 (1.0.0) initial adoption rather than an incremental bump.
 
 Modified principles: n/a (initial adoption)
@@ -42,12 +52,12 @@ Follow-up TODOs: none. Ratification date set to adoption date (today) since no
 prior ratified version exists.
 -->
 
-# OpenClaw AI Meeting Assistant Constitution
+# MeetMind AI Meeting Assistant Constitution
 
 ## Project Vision
 
 Build a reliable, modular, production-ready AI Meeting Assistant powered by
-OpenClaw that automates meeting workflows from transcription through task
+MeetMind that automates meeting workflows from transcription through task
 management and executive reporting. The system MUST minimize manual work
 after meetings while providing accurate summaries, actionable insights, and
 seamless integrations with communication and productivity platforms.
@@ -69,7 +79,7 @@ faster than it saves time.
 
 ### II. Modular Agent Architecture
 
-Every responsibility MUST belong to an independent OpenClaw agent with a
+Every responsibility MUST belong to an independent MeetMind agent with a
 single responsibility, communicating through structured outputs rather than
 tightly coupled logic. Representative agents include the CEO Agent, Meeting
 Intelligence Agent, Transcript Agent, Summary Agent, Action Item Agent,
@@ -82,7 +92,7 @@ the system grow without cascading rewrites across unrelated workflows.
 
 ### III. Tool-Driven Design
 
-OpenClaw MUST interact with external systems — Discord, Otter AI, Trello,
+MeetMind MUST interact with external systems — Discord, Otter AI, Trello,
 and future integrations — through dedicated tools rather than embedding
 business logic inside prompts. Tools MUST be designed so that adding a new
 integration requires minimal changes to existing agents.
@@ -237,7 +247,7 @@ The project is considered successful when it can reliably:
 ## Governance
 
 This constitution supersedes all other development practices for the
-OpenClaw AI Meeting Assistant. All PRs and reviews MUST verify compliance
+MeetMind AI Meeting Assistant. All PRs and reviews MUST verify compliance
 with these principles; any deviation MUST be justified in the PR description
 and, if it establishes a recurring pattern, MUST be captured as an amendment
 here rather than left as a one-off exception.
@@ -271,4 +281,4 @@ Constitution versions follow semantic versioning (MAJOR.MINOR.PATCH):
   runtime development guidance; this constitution is the authority when the
   two conflict.
 
-**Version**: 1.0.0 | **Ratified**: 2026-07-30 | **Last Amended**: 2026-07-30
+**Version**: 1.0.1 | **Ratified**: 2026-07-30 | **Last Amended**: 2026-08-20

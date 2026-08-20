@@ -2,7 +2,10 @@
 
 T082: updated to mcp_clients/otter_client.py's async interface
 (search_meetings/get_transcript) — same test intent, mechanical update
-(research.md R11)."""
+(research.md R11).
+
+Feature 002: TranscriptAgent is now constructed with an explicit `user_id`
+(every Meeting row it creates is scoped to that user)."""
 
 from __future__ import annotations
 
@@ -26,7 +29,7 @@ def _make_otter_client_stub(meetings: list[dict]) -> AsyncMock:
 
 
 @pytest.mark.asyncio
-async def test_new_meeting_is_created_and_recorded(db_conn):
+async def test_new_meeting_is_created_and_recorded(db_conn, test_user_id):
     otter_client = _make_otter_client_stub(
         [
             {
@@ -39,17 +42,17 @@ async def test_new_meeting_is_created_and_recorded(db_conn):
             }
         ]
     )
-    agent = TranscriptAgent(otter_client, db_conn)
+    agent = TranscriptAgent(otter_client, db_conn, test_user_id)
 
     new_meetings = await agent.poll_new_meetings()
 
     assert len(new_meetings) == 1
     assert new_meetings[0].id == "m1"
-    assert meeting_exists(db_conn, "m1")
+    assert meeting_exists(db_conn, test_user_id, "m1")
 
 
 @pytest.mark.asyncio
-async def test_already_processed_meeting_is_not_recreated(db_conn):
+async def test_already_processed_meeting_is_not_recreated(db_conn, test_user_id):
     otter_client = _make_otter_client_stub(
         [
             {
@@ -62,7 +65,7 @@ async def test_already_processed_meeting_is_not_recreated(db_conn):
             }
         ]
     )
-    agent = TranscriptAgent(otter_client, db_conn)
+    agent = TranscriptAgent(otter_client, db_conn, test_user_id)
 
     first_pass = await agent.poll_new_meetings()
     second_pass = await agent.poll_new_meetings()
@@ -73,7 +76,7 @@ async def test_already_processed_meeting_is_not_recreated(db_conn):
 
 
 @pytest.mark.asyncio
-async def test_multiple_new_meetings_all_created(db_conn):
+async def test_multiple_new_meetings_all_created(db_conn, test_user_id):
     otter_client = _make_otter_client_stub(
         [
             {
@@ -94,7 +97,7 @@ async def test_multiple_new_meetings_all_created(db_conn):
             },
         ]
     )
-    agent = TranscriptAgent(otter_client, db_conn)
+    agent = TranscriptAgent(otter_client, db_conn, test_user_id)
 
     new_meetings = await agent.poll_new_meetings()
 

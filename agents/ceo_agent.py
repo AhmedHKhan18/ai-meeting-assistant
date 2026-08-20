@@ -6,6 +6,14 @@ clear message rather than a silent timeout (FR-019).
 User Story 1 (chat interaction) command handlers live here: /status, /help,
 /summarize, /tasks, /report, plus the unrecognized-command fallback — see
 contracts/discord-commands.md for the behavioral contract each implements.
+
+Scoped per user (specs/002-web-frontend): one `CEOAgent` instance now serves
+exactly one user's own workspace. It takes an explicit `user_id` and a
+`credentials` dict (built by `runtime/credentials.py` from that user's own
+connected integrations) instead of reading a single global `.env`/singleton
+credential set via `load_credentials()` — `runtime/assistant_manager.py`
+constructs and owns one instance per running user, rather than one shared
+process-wide instance.
 """
 
 from __future__ import annotations
@@ -23,7 +31,7 @@ from models.db import get_connection
 from models.meeting import clear_expired_transcripts, get_latest_processed_meeting
 from models.summary import get_summary_by_meeting
 from models.tracked_task import get_outstanding_tracked_tasks
-from tools.config_loader import load_credentials, load_report_schedule, load_team_mapping
+from tools.config_loader import load_report_schedule, load_team_mapping
 from tools.discord_tool import CommandContext, DiscordTool
 from tools.logging_setup import get_logger, timed_event
 from tools.openai_tool import OpenAITool
@@ -42,45 +50,48 @@ SUPPORTED_COMMANDS = ("/status", "/help", "/summarize", "/tasks", "/report")
 class CEOAgent:
     def __init__(
         self,
-        settings: dict,
         *,
+        user_id: str,
+        credentials: dict,
+        settings: dict,
         conn: sqlite3.Connection | None = None,
         discord_tool: DiscordTool | None = None,
     ) -> None:
+        self.user_id = user_id
+        self.credentials = credentials
         self.settings = settings
         self.conn = conn or get_connection()
         if discord_tool is not None:
             self.discord_tool = discord_tool
         else:
-            credentials = load_credentials()
-            self.discord_tool = DiscordTool(token=credentials["DISCORD_BOT_TOKEN"])
+            self.discord_tool = DiscordTool(token=credentials.get("discord_bot_token", ""))
         self.notification_agent = NotificationAgent(self.discord_tool)
         self.scheduler_tool = SchedulerTool()
         self.channels = settings.get("discord", {}).get("channels", ["general"])
         self._register_commands()
 
-        credentials = load_credentials()
         otter_client = OtterMCPClient(
-            server_url=credentials.get("OTTER_MCP_SERVER_URL", ""),
+            server_url=credentials.get("otter_mcp_server_url", ""),
             conn=self.conn,
+            user_id=user_id,
         )
         openai_tool = OpenAITool(
-            api_key=credentials.get("GEMINI_API_KEY", ""),
+            api_key=credentials.get("gemini_api_key", ""),
             model=settings.get("openai", {}).get("model", "gemini-2.5-flash"),
         )
-        self.transcript_agent = TranscriptAgent(otter_client, self.conn)
+        self.transcript_agent = TranscriptAgent(otter_client, self.conn, user_id)
         self.meeting_intelligence_agent = MeetingIntelligenceAgent(openai_tool, settings)
 
         trello_tool = TrelloTool(
-            api_key=credentials.get("TRELLO_API_KEY", ""),
-            token=credentials.get("TRELLO_TOKEN", ""),
-            board_id=settings.get("trello", {}).get("board_id", ""),
+            api_key=credentials.get("trello_api_key", ""),
+            token=credentials.get("trello_token", ""),
+            board_id=credentials.get("trello_board_id", ""),
         )
         self.task_automation_agent = TaskAutomationAgent(
             trello_tool,
             self.conn,
             load_team_mapping,
-            list_id=settings.get("trello", {}).get("list_id", ""),
+            list_id=credentials.get("trello_list_id", ""),
         )
         self.trello_workflow = TrelloWorkflow(self.task_automation_agent, self.conn)
 
@@ -89,16 +100,17 @@ class CEOAgent:
             meeting_intelligence_agent=self.meeting_intelligence_agent,
             notification_agent=self.notification_agent,
             conn=self.conn,
+            user_id=user_id,
             channels=self.channels,
             trello_workflow=self.trello_workflow,
         )
 
-        self.executive_assistant_agent = ExecutiveAssistantAgent(self.conn)
+        self.executive_assistant_agent = ExecutiveAssistantAgent(self.conn, user_id)
         self.morning_report_workflow = MorningReportWorkflow(
-            self.executive_assistant_agent, self.notification_agent, self.conn, self.channels
+            self.executive_assistant_agent, self.notification_agent, self.conn, user_id, self.channels
         )
         self.evening_report_workflow = EveningReportWorkflow(
-            self.executive_assistant_agent, self.notification_agent, self.conn, self.channels
+            self.executive_assistant_agent, self.notification_agent, self.conn, user_id, self.channels
         )
 
     def _wrap(self, name: str, handler):
@@ -107,9 +119,7 @@ class CEOAgent:
                 try:
                     return await handler(ctx)
                 except Exception as exc:  # noqa: BLE001 - FR-019: never fail silently
-                    logger.error(
-                        "command_error", extra={"fields": {"command": name, "error": str(exc)}}
-                    )
+                    logger.error("command_error", extra={"fields": {"command": name, "error": str(exc)}})
                     return "Sorry, something went wrong handling that. It's been logged for review."
 
         return _guarded
@@ -154,7 +164,7 @@ class CEOAgent:
         )
 
     async def handle_summarize(self, ctx: CommandContext) -> str:
-        meeting = get_latest_processed_meeting(self.conn)
+        meeting = get_latest_processed_meeting(self.conn, self.user_id)
         if meeting is None:
             return "I don't have any processed meetings yet — nothing to summarize."
         summary = get_summary_by_meeting(self.conn, meeting.id)
@@ -163,7 +173,7 @@ class CEOAgent:
         return f"**{meeting.title}**\n{summary.overview}"
 
     async def handle_tasks(self, ctx: CommandContext) -> str:
-        outstanding = get_outstanding_tracked_tasks(self.conn)
+        outstanding = get_outstanding_tracked_tasks(self.conn, self.user_id)
         if not outstanding:
             return "No outstanding tasks right now."
         lines = ["**Outstanding tasks:**"]
@@ -176,7 +186,9 @@ class CEOAgent:
         report_type = ctx.args.get("type") or "evening"
         if report_type not in ("morning", "evening"):
             return "Report type must be 'morning' or 'evening'."
-        report = get_latest_report(self.conn, report_type=report_type, channel=ctx.channel)
+        report = get_latest_report(
+            self.conn, user_id=self.user_id, report_type=report_type, channel=ctx.channel
+        )
         if report is None:
             return f"No {report_type} report has been generated for this channel yet."
         return f"**{report_type.title()} report ({report.report_date})**\n{report.content}"
@@ -188,7 +200,7 @@ class CEOAgent:
 
     async def _run_retention_cleanup_job(self) -> None:
         retention_days = self.settings.get("transcript_retention_days", 30)
-        cleared = clear_expired_transcripts(self.conn, retention_days)
+        cleared = clear_expired_transcripts(self.conn, self.user_id, retention_days)
         if cleared:
             logger.info(
                 "retention_cleanup",
