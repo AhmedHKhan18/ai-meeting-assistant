@@ -37,7 +37,7 @@ direct tool calls (`tools/discord_tool.py`, `tools/openai_tool.py`, `tools/trell
 ## Technical Context
 
 **Language/Version**: Python 3.14+
-**Primary Dependencies**: OpenClaw (agent orchestration), OpenAI Agents SDK / OpenAI Responses API (structured JSON generation), the official MCP Python client SDK (`mcp`, package `mcp>=1.0.0`) for the Otter MCP Server connection — its built-in `mcp.client.auth.OAuthClientProvider` handles OAuth (including dynamic client registration) rather than a separate OAuth library, a Discord bot client, a Trello REST API client, APScheduler, python-dotenv
+**Primary Dependencies**: MeetMind (agent orchestration), OpenAI Agents SDK / OpenAI Responses API (structured JSON generation), the official MCP Python client SDK (`mcp`, package `mcp>=1.0.0`) for the Otter MCP Server connection — its built-in `mcp.client.auth.OAuthClientProvider` handles OAuth (including dynamic client registration) rather than a separate OAuth library, a Discord bot client, a Trello REST API client, APScheduler, python-dotenv
 **Storage**: SQLite, file-based and embedded (unchanged from the prior plan — see research.md R2). Additionally now stores OAuth token state (access token, refresh token, expiry) for the Otter MCP connection — see research.md R12.
 **Testing**: pytest, `unittest.mock` (the MCP client is mocked in tests exactly like the other external tools — constitution Testing standard)
 **Target Platform**: Linux server process for production; local machine with a Python virtual environment and mocked MCP/OAuth responses for development

@@ -25,9 +25,10 @@ logger = get_logger("transcript_agent")
 
 
 class TranscriptAgent:
-    def __init__(self, otter_client: OtterMCPClient, conn: sqlite3.Connection) -> None:
+    def __init__(self, otter_client: OtterMCPClient, conn: sqlite3.Connection, user_id: str) -> None:
         self.otter_client = otter_client
         self.conn = conn
+        self.user_id = user_id
 
     async def poll_new_meetings(self) -> list[Meeting]:
         """Returns newly created Meeting rows for every completed transcript
@@ -38,11 +39,12 @@ class TranscriptAgent:
             new_meetings: list[Meeting] = []
             for candidate in candidates:
                 meeting_id = candidate["id"]
-                if meeting_exists(self.conn, meeting_id):
+                if meeting_exists(self.conn, self.user_id, meeting_id):
                     continue
                 full = await self.otter_client.get_transcript(meeting_id)
                 meeting = create_meeting(
                     self.conn,
+                    user_id=self.user_id,
                     meeting_id=full["id"],
                     title=full["title"],
                     date=full["date"],

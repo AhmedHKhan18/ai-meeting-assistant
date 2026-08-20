@@ -71,17 +71,19 @@ _oauth2.validate_metadata_issuer = _validate_metadata_issuer_tolerant
 
 
 class SQLiteTokenStorage(TokenStorage):
-    """Persists OAuth state to the OtterCredentials table (research.md R12)
-    instead of the SDK default of in-memory-only storage. The SDK's
-    `OAuthClientProvider` calls these methods itself as part of its
-    `httpx.Auth` flow — it checks expiry and refreshes transparently before
-    each request; this class only needs to durably store what it's given."""
+    """Persists OAuth state to the OtterCredentials table (research.md R12),
+    scoped per user (specs/002-web-frontend/research.md R5) instead of the
+    SDK default of in-memory-only storage. The SDK's `OAuthClientProvider`
+    calls these methods itself as part of its `httpx.Auth` flow — it checks
+    expiry and refreshes transparently before each request; this class only
+    needs to durably store what it's given."""
 
-    def __init__(self, conn: sqlite3.Connection) -> None:
+    def __init__(self, conn: sqlite3.Connection, user_id: str) -> None:
         self.conn = conn
+        self.user_id = user_id
 
     async def get_tokens(self) -> OAuthToken | None:
-        creds = get_credentials(self.conn)
+        creds = get_credentials(self.conn, self.user_id)
         if creds is None or not creds.access_token:
             return None
         expires_in = None
@@ -104,6 +106,7 @@ class SQLiteTokenStorage(TokenStorage):
             expires_at = (datetime.now(UTC) + timedelta(seconds=tokens.expires_in)).isoformat()
         save_tokens(
             self.conn,
+            user_id=self.user_id,
             access_token=tokens.access_token,
             refresh_token=tokens.refresh_token,
             token_type=tokens.token_type,
@@ -112,13 +115,13 @@ class SQLiteTokenStorage(TokenStorage):
         )
 
     async def get_client_info(self) -> OAuthClientInformationFull | None:
-        creds = get_credentials(self.conn)
+        creds = get_credentials(self.conn, self.user_id)
         if creds is None or not creds.client_info:
             return None
         return OAuthClientInformationFull.model_validate(creds.client_info)
 
     async def set_client_info(self, client_info: OAuthClientInformationFull) -> None:
-        save_client_info(self.conn, client_info=client_info.model_dump(mode="json"))
+        save_client_info(self.conn, user_id=self.user_id, client_info=client_info.model_dump(mode="json"))
 
 
 async def _cli_redirect_handler(url: str) -> None:
@@ -203,15 +206,23 @@ class OtterMCPClient:
         *,
         server_url: str,
         conn: sqlite3.Connection,
+        user_id: str,
+        redirect_uri: str = "http://localhost:8765/callback",
         redirect_handler=None,
         callback_handler=None,
     ) -> None:
         self.server_url = server_url
         self.conn = conn
-        self.storage = SQLiteTokenStorage(conn)
+        self.user_id = user_id
+        self.storage = SQLiteTokenStorage(conn, user_id)
         metadata = OAuthClientMetadata(
-            client_name="OpenClaw AI Meeting Assistant",
-            redirect_uris=[AnyUrl("http://localhost:8765/callback")],
+            client_name="MeetMind",
+            # Defaults to a non-listening placeholder for the CLI flow (a
+            # human copies the code from the browser's address bar by hand,
+            # per _cli_callback_handler); the web flow
+            # (runtime/otter_oauth_web.py) passes its real callback URL so
+            # Otter redirects the browser there directly instead.
+            redirect_uris=[AnyUrl(redirect_uri)],
             grant_types=["authorization_code", "refresh_token"],
         )
         # No static client_id/secret: OAuthClientProvider performs dynamic
@@ -342,11 +353,13 @@ class OtterMCPClient:
 
 
 async def _authorize() -> None:
-    """One-time, standalone authorization: forces the OAuth flow to run to
-    completion in its own process, outside the bot's event loop. Run this
-    *before* `python main.py` — the flow's `input()` prompt would otherwise
-    block the whole Discord connection (heartbeats included) if it happened
-    to fire mid-run, inside the scheduler's first poll."""
+    """One-time, standalone CLI authorization for a single user (debug/dev
+    tool, superseded for end users by the web OAuth flow in
+    `api/routers/integrations.py` + `runtime/otter_oauth_web.py`, feature
+    002). Forces the OAuth flow to run to completion in its own process,
+    outside the bot's event loop — the flow's `input()` prompt would
+    otherwise block the whole Discord connection (heartbeats included) if it
+    happened to fire mid-run, inside the scheduler's first poll."""
     import sys
 
     from models.db import get_connection, init_db
@@ -359,7 +372,8 @@ async def _authorize() -> None:
         print("OTTER_MCP_SERVER_URL is not set in .env — set it before authorizing.")
         sys.exit(1)
 
-    client = OtterMCPClient(server_url=server_url, conn=get_connection())
+    user_id = input("User id to authorize Otter for (default: legacy): ").strip() or "legacy"
+    client = OtterMCPClient(server_url=server_url, conn=get_connection(), user_id=user_id)
     print(f"Authorizing against {server_url} ...")
     try:
         meetings = await client.search_meetings(status="complete")

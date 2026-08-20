@@ -17,9 +17,10 @@ TEAM_MAPPING = [{"match": "backend", "owner": "Ahmed", "specificity": 1}]
 
 
 @pytest.fixture()
-def seeded_action_item(db_conn):
+def seeded_action_item(db_conn, test_user_id):
     create_meeting(
         db_conn,
+        user_id=test_user_id,
         meeting_id="m1",
         title="Standup",
         date="2026-07-30T09:00:00",

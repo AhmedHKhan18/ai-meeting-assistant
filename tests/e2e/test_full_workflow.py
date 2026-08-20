@@ -61,12 +61,12 @@ AI_RESULT = {
 
 
 @pytest.mark.asyncio
-async def test_full_meeting_to_report_pipeline(db_conn, mock_discord_tool):
+async def test_full_meeting_to_report_pipeline(db_conn, mock_discord_tool, test_user_id):
     # -- Transcript retrieval (mocked Otter MCP client) --
     otter_client = AsyncMock()
     otter_client.search_meetings.return_value = [{"id": MEETING_PAYLOAD["id"]}]
     otter_client.get_transcript.return_value = MEETING_PAYLOAD
-    transcript_agent = TranscriptAgent(otter_client, db_conn)
+    transcript_agent = TranscriptAgent(otter_client, db_conn, test_user_id)
 
     # -- Meeting intelligence (mocked OpenAI) --
     openai_tool = MagicMock()
@@ -87,6 +87,7 @@ async def test_full_meeting_to_report_pipeline(db_conn, mock_discord_tool):
         meeting_intelligence_agent=intelligence_agent,
         notification_agent=notification_agent,
         conn=db_conn,
+        user_id=test_user_id,
         channels=["general"],
         trello_workflow=trello_workflow,
     )
@@ -95,7 +96,7 @@ async def test_full_meeting_to_report_pipeline(db_conn, mock_discord_tool):
     processed = await meeting_workflow.run()
     assert len(processed) == 1
 
-    meeting = get_meeting(db_conn, MEETING_PAYLOAD["id"])
+    meeting = get_meeting(db_conn, test_user_id, MEETING_PAYLOAD["id"])
     assert meeting.processing_status == "processed"
     assert mock_discord_tool.send_message.await_count == 1  # summary posted
 
@@ -108,8 +109,10 @@ async def test_full_meeting_to_report_pipeline(db_conn, mock_discord_tool):
     assert tracked_task.assignee == "Ahmed"  # resolved via keyword mapping
 
     # -- Step 5: Daily Report --
-    exec_agent = ExecutiveAssistantAgent(db_conn)
-    evening_workflow = EveningReportWorkflow(exec_agent, notification_agent, db_conn, ["general"])
+    exec_agent = ExecutiveAssistantAgent(db_conn, test_user_id)
+    evening_workflow = EveningReportWorkflow(
+        exec_agent, notification_agent, db_conn, test_user_id, ["general"]
+    )
     [report] = await evening_workflow.run(date=TODAY)
 
     assert report.delivery_status == "delivered"

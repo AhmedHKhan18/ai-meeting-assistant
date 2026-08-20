@@ -10,8 +10,14 @@ from tools.discord_tool import CommandContext
 
 
 @pytest.fixture()
-def ceo_agent(db_conn, mock_discord_tool):
-    return CEOAgent({"discord": {"channels": ["general"]}}, conn=db_conn, discord_tool=mock_discord_tool)
+def ceo_agent(db_conn, mock_discord_tool, test_user_id):
+    return CEOAgent(
+        user_id=test_user_id,
+        credentials={},
+        settings={"discord": {"channels": ["general"]}},
+        conn=db_conn,
+        discord_tool=mock_discord_tool,
+    )
 
 
 def test_registers_all_supported_commands(ceo_agent, mock_discord_tool):

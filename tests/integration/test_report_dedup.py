@@ -13,10 +13,12 @@ TODAY = "2026-07-30"
 
 
 @pytest.mark.asyncio
-async def test_rerunning_morning_workflow_same_day_produces_no_duplicate(db_conn, mock_discord_tool):
-    agent = ExecutiveAssistantAgent(db_conn)
+async def test_rerunning_morning_workflow_same_day_produces_no_duplicate(
+    db_conn, mock_discord_tool, test_user_id
+):
+    agent = ExecutiveAssistantAgent(db_conn, test_user_id)
     notification_agent = NotificationAgent(mock_discord_tool)
-    workflow = MorningReportWorkflow(agent, notification_agent, db_conn, ["general"])
+    workflow = MorningReportWorkflow(agent, notification_agent, db_conn, test_user_id, ["general"])
 
     first_run = await workflow.run(date=TODAY)
     second_run = await workflow.run(date=TODAY)
@@ -28,10 +30,10 @@ async def test_rerunning_morning_workflow_same_day_produces_no_duplicate(db_conn
 
 
 @pytest.mark.asyncio
-async def test_different_channels_each_get_their_own_report(db_conn, mock_discord_tool):
-    agent = ExecutiveAssistantAgent(db_conn)
+async def test_different_channels_each_get_their_own_report(db_conn, mock_discord_tool, test_user_id):
+    agent = ExecutiveAssistantAgent(db_conn, test_user_id)
     notification_agent = NotificationAgent(mock_discord_tool)
-    workflow = MorningReportWorkflow(agent, notification_agent, db_conn, ["team-a", "team-b"])
+    workflow = MorningReportWorkflow(agent, notification_agent, db_conn, test_user_id, ["team-a", "team-b"])
 
     reports = await workflow.run(date=TODAY)
 

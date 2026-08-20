@@ -14,16 +14,20 @@ RESPONSE_BUDGET_SECONDS = 5.0
 
 
 @pytest.fixture()
-def ceo_agent(db_conn, mock_discord_tool):
-    return CEOAgent({"discord": {"channels": ["general"]}}, conn=db_conn, discord_tool=mock_discord_tool)
+def ceo_agent(db_conn, mock_discord_tool, test_user_id):
+    return CEOAgent(
+        user_id=test_user_id,
+        credentials={},
+        settings={"discord": {"channels": ["general"]}},
+        conn=db_conn,
+        discord_tool=mock_discord_tool,
+    )
 
 
 @pytest.mark.asyncio
 async def test_status_command_responds_within_budget(ceo_agent, mock_discord_tool):
     handler = next(
-        call.args[2]
-        for call in mock_discord_tool.register_command.call_args_list
-        if call.args[0] == "status"
+        call.args[2] for call in mock_discord_tool.register_command.call_args_list if call.args[0] == "status"
     )
     start = time.monotonic()
     reply = await handler(CommandContext(channel="general", args={}))
@@ -36,9 +40,7 @@ async def test_status_command_responds_within_budget(ceo_agent, mock_discord_too
 @pytest.mark.asyncio
 async def test_help_command_responds_within_budget(ceo_agent, mock_discord_tool):
     handler = next(
-        call.args[2]
-        for call in mock_discord_tool.register_command.call_args_list
-        if call.args[0] == "help"
+        call.args[2] for call in mock_discord_tool.register_command.call_args_list if call.args[0] == "help"
     )
     start = time.monotonic()
     reply = await handler(CommandContext(channel="general", args={}))

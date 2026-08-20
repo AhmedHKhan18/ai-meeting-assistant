@@ -70,11 +70,13 @@ class DiscordTool:
         # discord.py's app_commands needs a concrete signature per command, so we
         # build one dynamically for the small, fixed command set FR-001 defines.
         if args:
+
             async def _wrapped(interaction: discord.Interaction, meeting: str | None = None):
                 await _dispatch(interaction, **({"meeting": meeting} if "meeting" in args else {}))
 
             self.tree.command(name=name, description=description)(_wrapped)
         else:
+
             async def _wrapped_no_args(interaction: discord.Interaction):
                 await _dispatch(interaction)
 
@@ -139,3 +141,9 @@ class DiscordTool:
 
     async def run_forever(self) -> None:
         await asyncio.gather(self.start())
+
+    async def close(self) -> None:
+        """Graceful shutdown (feature 002, `runtime/assistant_manager.py`):
+        lets `client.start()` return on its own via a clean gateway logout,
+        rather than relying solely on cancelling the task that's awaiting it."""
+        await self.client.close()

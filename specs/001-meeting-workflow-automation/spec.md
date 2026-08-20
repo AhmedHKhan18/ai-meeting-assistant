@@ -216,7 +216,7 @@ The OpenClaw AI Meeting Assistant is considered complete when it can autonomousl
 
 ## Overview
 
-The OpenClaw AI Meeting Assistant automates the full meeting follow-up lifecycle for a
+The MeetMind AI Meeting Assistant automates the full meeting follow-up lifecycle for a
 team: once a meeting ends, it retrieves the transcript, turns it into a structured
 summary and action items, delivers that to the team's chat, turns the action items into
 tracked tasks assigned to the right owner, and keeps everyone current with automatic

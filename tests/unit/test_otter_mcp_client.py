@@ -38,7 +38,7 @@ def _otter_wrapped(payload) -> dict:
 
 
 def _client_with_fake_session(db_conn, call_tool_mock):
-    client = OtterMCPClient(server_url="https://example.com/mcp", conn=db_conn)
+    client = OtterMCPClient(server_url="https://example.com/mcp", conn=db_conn, user_id="test-user")
     fake_session = MagicMock()
     fake_session.call_tool = call_tool_mock
 
@@ -174,7 +174,7 @@ async def test_transport_error_is_recoverable_and_retried(db_conn):
         raise ConnectionError("refused")
         yield  # pragma: no cover - unreachable, satisfies generator shape
 
-    client = OtterMCPClient(server_url="https://example.com/mcp", conn=db_conn)
+    client = OtterMCPClient(server_url="https://example.com/mcp", conn=db_conn, user_id="test-user")
     client._session = failing_session
 
     with pytest.raises(RecoverableError):

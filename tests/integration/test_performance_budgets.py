@@ -38,14 +38,18 @@ AI_RESULT = {
 
 
 @pytest.mark.asyncio
-async def test_sc001_summary_pipeline_completes_within_30s(db_conn, mock_discord_tool):
+async def test_sc001_summary_pipeline_completes_within_30s(db_conn, mock_discord_tool, test_user_id):
     otter_client = AsyncMock()
     otter_client.search_meetings.return_value = [{"id": "m1"}]
     otter_client.get_transcript.return_value = {
-        "id": "m1", "title": "T", "date": "2026-07-30T09:00:00",
-        "duration_minutes": 10, "participants": [], "transcript_text": "hi",
+        "id": "m1",
+        "title": "T",
+        "date": "2026-07-30T09:00:00",
+        "duration_minutes": 10,
+        "participants": [],
+        "transcript_text": "hi",
     }
-    transcript_agent = TranscriptAgent(otter_client, db_conn)
+    transcript_agent = TranscriptAgent(otter_client, db_conn, test_user_id)
     openai_tool = MagicMock()
     openai_tool.generate_structured.return_value = AI_RESULT
     intelligence_agent = MeetingIntelligenceAgent(openai_tool, SETTINGS, schema=SCHEMA)
@@ -55,6 +59,7 @@ async def test_sc001_summary_pipeline_completes_within_30s(db_conn, mock_discord
         meeting_intelligence_agent=intelligence_agent,
         notification_agent=notification_agent,
         conn=db_conn,
+        user_id=test_user_id,
         channels=["general"],
     )
 
@@ -64,10 +69,10 @@ async def test_sc001_summary_pipeline_completes_within_30s(db_conn, mock_discord
 
 
 @pytest.mark.asyncio
-async def test_sc003_report_generation_completes_within_60s(db_conn, mock_discord_tool):
-    agent = ExecutiveAssistantAgent(db_conn)
+async def test_sc003_report_generation_completes_within_60s(db_conn, mock_discord_tool, test_user_id):
+    agent = ExecutiveAssistantAgent(db_conn, test_user_id)
     notification_agent = NotificationAgent(mock_discord_tool)
-    workflow = MorningReportWorkflow(agent, notification_agent, db_conn, ["general"])
+    workflow = MorningReportWorkflow(agent, notification_agent, db_conn, test_user_id, ["general"])
 
     start = time.monotonic()
     await workflow.run(date="2026-07-30")

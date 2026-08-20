@@ -1,21 +1,18 @@
-"""Entry point: starts the Discord bot connection and the APScheduler event loop."""
+"""Retired as the process entry point (specs/002-web-frontend/research.md R7).
 
-import asyncio
+The single-tenant `CEOAgent()` this used to start unconditionally is now
+constructed per-user, on demand, by `runtime/assistant_manager.py` — one
+instance per signed-in user who has connected their own integrations and
+clicked "Start" in the web UI, not one shared instance at process startup.
 
-from agents.ceo_agent import CEOAgent
-from models.db import init_db
-from tools.config_loader import load_settings
-from tools.logging_setup import get_logger
+Run the API (which owns both the HTTP layer and the per-user runtime
+manager) instead:
 
-logger = get_logger("main")
+    uvicorn api.main:app --reload --port 8000
+"""
 
-
-async def main() -> None:
-    init_db()
-    settings = load_settings()
-    agent = CEOAgent(settings=settings)
-    await agent.start()
-
+import sys
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    print(__doc__)
+    sys.exit(1)

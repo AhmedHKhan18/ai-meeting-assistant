@@ -1,10 +1,11 @@
 """Morning Report Workflow: Executive Assistant Agent → Notification Agent.
 
-Idempotent per (report_type, report_date, channel) via the DailyReport
-uniqueness constraint (T054/T059) — a duplicate scheduled run for the same
-day/channel is a no-op, not a duplicate send. If compilation hits an
-unexpected error, still attempts delivery with a note about what's missing
-rather than skipping the report entirely (FR-019, SC-007, US4-AS3).
+Idempotent per (user_id, report_type, report_date, channel) via the
+DailyReport uniqueness constraint (T054/T059, extended per-user in feature
+002) — a duplicate scheduled run for the same day/channel is a no-op, not a
+duplicate send. If compilation hits an unexpected error, still attempts
+delivery with a note about what's missing rather than skipping the report
+entirely (FR-019, SC-007, US4-AS3).
 """
 
 from __future__ import annotations
@@ -26,11 +27,13 @@ class MorningReportWorkflow:
         executive_assistant_agent: ExecutiveAssistantAgent,
         notification_agent: NotificationAgent,
         conn: sqlite3.Connection,
+        user_id: str,
         channels: list[str],
     ) -> None:
         self.executive_assistant_agent = executive_assistant_agent
         self.notification_agent = notification_agent
         self.conn = conn
+        self.user_id = user_id
         self.channels = channels
 
     async def run(self, *, date: str | None = None) -> list[DailyReport]:
@@ -39,7 +42,11 @@ class MorningReportWorkflow:
             results: list[DailyReport] = []
             for channel in self.channels:
                 existing = get_daily_report(
-                    self.conn, report_type="morning", report_date=report_date, channel=channel
+                    self.conn,
+                    user_id=self.user_id,
+                    report_type="morning",
+                    report_date=report_date,
+                    channel=channel,
                 )
                 if existing:
                     results.append(existing)
@@ -65,6 +72,7 @@ class MorningReportWorkflow:
 
                 report = create_daily_report(
                     self.conn,
+                    user_id=self.user_id,
                     report_type="morning",
                     report_date=report_date,
                     channel=channel,

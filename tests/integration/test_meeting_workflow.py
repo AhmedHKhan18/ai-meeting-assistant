@@ -4,7 +4,9 @@ then re-trigger the same meeting and assert no duplicate post
 
 T082: Otter mock updated to mcp_clients/otter_client.py's async interface
 and workflows.meeting_pipeline's renamed import path (research.md R11,
-plan.md Project Structure) — same test intent, mechanical update."""
+plan.md Project Structure) — same test intent, mechanical update.
+
+Feature 002: TranscriptAgent/MeetingWorkflow now take an explicit `user_id`."""
 
 from __future__ import annotations
 
@@ -52,7 +54,7 @@ STUB_AI_RESULT = {
 }
 
 
-def _build_workflow(db_conn, mock_discord_tool, *, otter_payloads):
+def _build_workflow(db_conn, mock_discord_tool, user_id, *, otter_payloads):
     otter_client = AsyncMock()
     otter_client.search_meetings.return_value = [{"id": p["id"]} for p in otter_payloads]
 
@@ -60,7 +62,7 @@ def _build_workflow(db_conn, mock_discord_tool, *, otter_payloads):
         return next(p for p in otter_payloads if p["id"] == meeting_id)
 
     otter_client.get_transcript.side_effect = _get_transcript
-    transcript_agent = TranscriptAgent(otter_client, db_conn)
+    transcript_agent = TranscriptAgent(otter_client, db_conn, user_id)
 
     openai_tool = MagicMock()
     openai_tool.generate_structured.return_value = STUB_AI_RESULT
@@ -73,18 +75,19 @@ def _build_workflow(db_conn, mock_discord_tool, *, otter_payloads):
         meeting_intelligence_agent=intelligence_agent,
         notification_agent=notification_agent,
         conn=db_conn,
+        user_id=user_id,
         channels=["general"],
     )
 
 
 @pytest.mark.asyncio
-async def test_new_meeting_is_summarized_and_posted(db_conn, mock_discord_tool):
-    workflow = _build_workflow(db_conn, mock_discord_tool, otter_payloads=[MEETING_PAYLOAD])
+async def test_new_meeting_is_summarized_and_posted(db_conn, mock_discord_tool, test_user_id):
+    workflow = _build_workflow(db_conn, mock_discord_tool, test_user_id, otter_payloads=[MEETING_PAYLOAD])
 
     processed = await workflow.run()
 
     assert len(processed) == 1
-    meeting = get_meeting(db_conn, "m1")
+    meeting = get_meeting(db_conn, test_user_id, "m1")
     assert meeting.processing_status == "processed"
     summary = get_summary_by_meeting(db_conn, "m1")
     assert summary is not None
@@ -94,8 +97,8 @@ async def test_new_meeting_is_summarized_and_posted(db_conn, mock_discord_tool):
 
 
 @pytest.mark.asyncio
-async def test_reprocessing_same_meeting_produces_no_duplicate(db_conn, mock_discord_tool):
-    workflow = _build_workflow(db_conn, mock_discord_tool, otter_payloads=[MEETING_PAYLOAD])
+async def test_reprocessing_same_meeting_produces_no_duplicate(db_conn, mock_discord_tool, test_user_id):
+    workflow = _build_workflow(db_conn, mock_discord_tool, test_user_id, otter_payloads=[MEETING_PAYLOAD])
 
     first_run = await workflow.run()
     second_run = await workflow.run()
@@ -107,20 +110,20 @@ async def test_reprocessing_same_meeting_produces_no_duplicate(db_conn, mock_dis
 
 
 @pytest.mark.asyncio
-async def test_delivery_failure_does_not_lose_the_meeting(db_conn, mock_discord_tool):
+async def test_delivery_failure_does_not_lose_the_meeting(db_conn, mock_discord_tool, test_user_id):
     """A meeting whose analysis succeeds but whose Discord delivery fails
     (e.g. an unresolvable channel) must not be silently dropped — since its
     row already exists, poll_new_meetings will never return it again, so
     workflows/meeting_pipeline.py's own retry-of-incomplete-meetings is the
     only thing that can recover it."""
-    workflow = _build_workflow(db_conn, mock_discord_tool, otter_payloads=[MEETING_PAYLOAD])
+    workflow = _build_workflow(db_conn, mock_discord_tool, test_user_id, otter_payloads=[MEETING_PAYLOAD])
     openai_tool = workflow.meeting_intelligence_agent.openai_tool
     mock_discord_tool.send_message.side_effect = RecoverableError("Channel not resolvable yet: general")
 
     with pytest.raises(RecoverableError):
         await workflow.run()
 
-    meeting = get_meeting(db_conn, "m1")
+    meeting = get_meeting(db_conn, test_user_id, "m1")
     assert meeting.processing_status == "processing"  # not falsely marked processed
     assert get_summary_by_meeting(db_conn, "m1") is not None  # analysis result preserved
     assert openai_tool.generate_structured.call_count == 1
@@ -133,7 +136,7 @@ async def test_delivery_failure_does_not_lose_the_meeting(db_conn, mock_discord_
     processed = await workflow.run()
 
     assert [m.id for m in processed] == ["m1"]
-    assert get_meeting(db_conn, "m1").processing_status == "processed"
+    assert get_meeting(db_conn, test_user_id, "m1").processing_status == "processed"
     assert mock_discord_tool.send_message.await_count == 1
     assert openai_tool.generate_structured.call_count == 1  # never re-analyzed
     assert len(get_action_items_for_meeting(db_conn, "m1")) == 1  # no duplicate action items
@@ -141,13 +144,13 @@ async def test_delivery_failure_does_not_lose_the_meeting(db_conn, mock_discord_
 
 @pytest.mark.asyncio
 async def test_trello_failure_does_not_block_completion_or_duplicate_notification(
-    db_conn, mock_discord_tool
+    db_conn, mock_discord_tool, test_user_id
 ):
     """Unlike a notification failure, a Trello failure (e.g. misconfigured
     list_id) must not leave the meeting at 'processing' — since the resume
     branch always resends the Discord summary, that would re-send it forever
     on every retry instead of just failing once and moving on."""
-    workflow = _build_workflow(db_conn, mock_discord_tool, otter_payloads=[MEETING_PAYLOAD])
+    workflow = _build_workflow(db_conn, mock_discord_tool, test_user_id, otter_payloads=[MEETING_PAYLOAD])
     trello_workflow = AsyncMock()
     trello_workflow.process_meeting_action_items.side_effect = NonRecoverableError(
         "Trello returned 400: invalid idList"
@@ -157,7 +160,7 @@ async def test_trello_failure_does_not_block_completion_or_duplicate_notificatio
     processed = await workflow.run()
 
     assert [m.id for m in processed] == ["m1"]
-    assert get_meeting(db_conn, "m1").processing_status == "processed"
+    assert get_meeting(db_conn, test_user_id, "m1").processing_status == "processed"
     # one post for the summary, one warning about the Trello failure
     assert mock_discord_tool.send_message.await_count == 2
 
